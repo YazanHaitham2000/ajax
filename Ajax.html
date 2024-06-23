@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ajax</title>
+    <style></style>
+</head>
+<body>
+    <h1>Ajax Request with JavaScript</h1>
+    <input type="text" id="comment" placeholder="JavaScript" oninput="updateComment()">
+    <button onclick="saveComment()">Send Comment</button>
+    <h2>Get comment: <span id="response"></span></h2>
+    <div id="commentsContainer"></div>
+
+    <script>
+        function saveComment() {
+            var comment = document.getElementById('comment').value;
+            if (comment) {
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '/saveComment', true);
+                xhr.setRequestHeader('Content-Type', 'application/json;charset=UTF-8');
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState === 4 && xhr.status === 200) {
+                        displayComment();
+                    }
+                };
+                xhr.send(JSON.stringify({ comment: comment }));
+            }
+        }
+
+        function updateComment() {
+            var comment = document.getElementById('comment').value;
+            document.getElementById('response').innerHTML = comment;
+        }
+
+        function displayComment() {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/getComment', true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response.comment) {
+                        var commentsContainer = document.getElementById('commentsContainer');
+                        var newComment = document.createElement('h3');
+                        newComment.textContent = response.comment;
+                        commentsContainer.appendChild(newComment);
+                    }
+                }
+            };
+            xhr.send();
+        }
+
+        // Simulate server with Local Storage
+        function setupLocalStorageServer() {
+            window.addEventListener('load', function() {
+                // Override XMLHttpRequest to intercept AJAX calls
+                var oldXHR = window.XMLHttpRequest;
+                function newXHR() {
+                    var realXHR = new oldXHR();
+                    realXHR.addEventListener('readystatechange', function() {
+                        if (realXHR.readyState === 1 && realXHR._url === '/saveComment') {
+                            realXHR._method = 'POST';
+                        }
+                        if (realXHR.readyState === 1 && realXHR._url === '/getComment') {
+                            realXHR._method = 'GET';
+                        }
+                    }, false);
+
+                    var oldOpen = realXHR.open;
+                    realXHR.open = function(method, url) {
+                        this._method = method;
+                        this._url = url;
+                        oldOpen.apply(this, arguments);
+                    };
+
+                    var oldSend = realXHR.send;
+                    realXHR.send = function(data) {
+                        if (this._url === '/saveComment' && this._method === 'POST') {
+                            var requestData = JSON.parse(data);
+                            localStorage.setItem('comment', requestData.comment);
+                            this.readyState = 4;
+                            this.status = 200;
+                            this.responseText = '{}';
+                            this.onreadystatechange && this.onreadystatechange();
+                        } else if (this._url === '/getComment' && this._method === 'GET') {
+                            var comment = localStorage.getItem('comment');
+                            this.readyState = 4;
+                            this.status = 200;
+                            this.responseText = JSON.stringify({ comment: comment });
+                            this.onreadystatechange && this.onreadystatechange();
+                        } else {
+                            oldSend.apply(this, arguments);
+                        }
+                    };
+
+                    return realXHR;
+                }
+
+                window.XMLHttpRequest = newXHR;
+            });
+        }
+
+        setupLocalStorageServer();
+        window.onload = function() {
+            displayComment();
+        }
+    </script>
+</body>
+</html>
